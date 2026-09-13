@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1976d2">
 <title>ケアマネ間取り図</title>
-<link rel="icon" type="image/png" href="icon.png.png">
-<link rel="apple-touch-icon" href="icon.png.png">  
 <style>
 *{box-sizing:border-box}
 :root{--blue:#1976d2;--bg:#f4f7fb;--line:#dbe2ea;--text:#222}
@@ -50,11 +48,11 @@ canvas{display:block;background:#fff;border:1px solid #aaa;box-shadow:0 2px 9px 
       <option value="">設備を選ぶ</option>
       <option>玄関</option><option>トイレ（洋式）</option><option>トイレ（和式）</option><option>ポータブルトイレ</option><option>浴室</option><option>洗面</option>
       <option>台所</option><option>ベッド</option><option>手すり</option><option>段差</option>
-      <option>階段</option><option>車いす</option><option>歩行器</option>
+      <option>階段</option><option>廊下</option><option>縦手すり</option><option>勝手口</option><option>スロープ</option><option>門柱</option>
     </select>
     <button onclick="setMode('text',this)">文字</button>
     <button onclick="setMode('select',this)">移動</button>
-    <button onclick="deleteSelected()">選択削除</button>
+    <button onclick="rotateSelected()">回転</button><button onclick="deleteSelected()">選択削除</button>
   </div>
 
   <div class="group">
@@ -111,7 +109,7 @@ function down(e){
     }else dragOffset=null;
     draw();return;
   }
-  if(mode==='item'){actions.push({type:'item',x:p.x,y:p.y,text:selectedItem});draw();return}
+  if(mode==='item'){actions.push({type:'item',x:p.x,y:p.y,text:selectedItem,rot:0});draw();return}
   if(mode==='text'){
     const t=prompt('文字を入力してください（例：居間、寝室、和室、LDK）');
     if(t){actions.push({type:'text',x:p.x,y:p.y,text:t});draw()}
@@ -159,7 +157,7 @@ function drawAction(a){
   }else if(a.type==='door'){drawDoor(a.x1,a.y1,a.x2,a.y2)}
   else if(a.type==='window'){drawWindow(a.x1,a.y1,a.x2,a.y2)}
   else if(a.type==='text'){ctx.fillText(a.text,a.x,a.y)}
-  else if(a.type==='item'){drawItem(a.text,a.x,a.y)}
+  else if(a.type==='item'){drawItem(a.text,a.x,a.y,a.rot||0)}
   ctx.restore();
 }
 function drawDoor(x1,y1,x2,y2){
@@ -173,7 +171,7 @@ function drawWindow(x1,y1,x2,y2){
   ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
 }
 function drawItem(text,x,y){
-  ctx.save();ctx.translate(x,y);ctx.strokeStyle='#222';ctx.fillStyle='#fff';ctx.lineWidth=2;ctx.font='14px sans-serif';ctx.textAlign='center';
+  ctx.save();ctx.translate(x,y);ctx.rotate(((arguments[3]||0))*Math.PI/180);ctx.strokeStyle='#222';ctx.fillStyle='#fff';ctx.lineWidth=2;ctx.font='14px sans-serif';ctx.textAlign='center';
   if(text==='トイレ' || text==='トイレ（洋式）'){
     ctx.strokeRect(-13,-28,26,14);ctx.beginPath();ctx.ellipse(0,7,15,21,0,0,Math.PI*2);ctx.stroke();
     ctx.fillStyle='#222';ctx.fillText('WC',0,42);
@@ -238,6 +236,13 @@ function deleteSelected(){
   if(selectedIndex<0){alert('先に「移動」を押して、削除したい設備または文字を選んでください。');return}
   actions.splice(selectedIndex,1);selectedIndex=-1;draw();
 }
+
+function rotateSelected(){
+ if(selectedIndex<0){alert('先に設備を選択してください');return}
+ const a=actions[selectedIndex];
+ if(a.type==='item'){a.rot=(a.rot||0)+90;draw();}
+}
+
 function undo(){actions.pop();selectedIndex=-1;draw()}
 function clearAll(){if(confirm('全部消去しますか？')){actions=[];selectedIndex=-1;draw()}}
 function saveImage(){
