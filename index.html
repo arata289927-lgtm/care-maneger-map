@@ -58,6 +58,8 @@ canvas{display:block;background:#fff;border:1px solid #bbb;touch-action:none;box
       <option>歩行器</option>
     </select>
     <button onclick="setMode('text')">文字</button>
+    <button onclick="setMode('select')">移動</button>
+    <button onclick="deleteSelected()">選択削除</button>
   </div>
 
   <div class="group">
@@ -81,6 +83,7 @@ const help = document.getElementById('help');
 
 let mode='room', selectedItem='', start=null, temp=null;
 let actions=[];
+let selectedIndex=-1, dragOffset=null;
 
 function setMode(m){
   mode=m; selectedItem='';
@@ -92,7 +95,8 @@ function setMode(m){
     line:'ドラッグして壁・線を引きます。',
     door:'ドラッグしてドアを配置します。',
     window:'ドラッグして窓を配置します。',
-    text:'置きたい場所をタップして文字を入力します。'
+    text:'置きたい場所をタップして文字を入力します。',
+    select:'設備や文字をクリックして選択し、そのままドラッグして移動できます。'
   };
   help.textContent=map[m]||'';
 }
@@ -118,6 +122,14 @@ function sp(e){ const p=pos(e); return {x:snap(p.x),y:snap(p.y)}; }
 function down(e){
   e.preventDefault();
   const p=sp(e);
+  if(mode==='select'){
+    selectedIndex=hitTest(p);
+    if(selectedIndex>=0){
+      const a=actions[selectedIndex];
+      if(a.x!==undefined) dragOffset={x:p.x-a.x,y:p.y-a.y};
+    } else dragOffset=null;
+    draw(); return;
+  }
   if(mode==='item'){
     actions.push({type:'item',x:p.x,y:p.y,text:selectedItem});
     draw(); return;
@@ -131,13 +143,20 @@ function down(e){
 }
 
 function move(e){
-  if(!start) return;
   e.preventDefault();
-  temp=sp(e); draw();
+  const p=sp(e);
+  if(mode==='select' && selectedIndex>=0 && dragOffset){
+    const a=actions[selectedIndex];
+    if(a.x!==undefined){ a.x=p.x-dragOffset.x; a.y=p.y-dragOffset.y; draw(); }
+    return;
+  }
+  if(!start) return;
+  temp=p; draw();
   drawPreview(start,temp);
 }
 
 function up(e){
+  if(mode==='select'){ dragOffset=null; return; }
   if(!start) return;
   e.preventDefault();
   const end=sp(e);
@@ -165,7 +184,7 @@ function drawGrid(){
 
 function draw(){
   drawGrid();
-  actions.forEach(a=>drawAction(a));
+  actions.forEach((a,i)=>{ drawAction(a); if(i===selectedIndex) drawSelection(a); });
 }
 
 function drawAction(a){
@@ -209,36 +228,78 @@ function drawWindow(x1,y1,x2,y2){
 }
 
 function drawItem(text,x,y){
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.strokeStyle='#222';ctx.fillStyle='#fff';ctx.lineWidth=2;
-  if(text==='ベッド'){
-    ctx.strokeRect(-35,-18,70,36);
-    ctx.strokeRect(-30,-14,22,14);
+  ctx.save(); ctx.translate(x,y);
+  ctx.strokeStyle='#222'; ctx.fillStyle='#fff'; ctx.lineWidth=2;
+  ctx.font='14px sans-serif'; ctx.textAlign='center';
+
+  if(text==='トイレ'){
+    ctx.beginPath(); ctx.ellipse(0,5,15,20,0,0,Math.PI*2); ctx.stroke();
+    ctx.strokeRect(-13,-24,26,13);
+    ctx.fillStyle='#222'; ctx.fillText('WC',0,38);
+  }else if(text==='浴室'){
+    ctx.strokeRect(-34,-22,68,44);
+    ctx.beginPath(); ctx.roundRect(-25,-14,50,28,10); ctx.stroke();
+    ctx.fillStyle='#222'; ctx.fillText('浴室',0,39);
+  }else if(text==='洗面'){
+    ctx.strokeRect(-25,-20,50,40);
+    ctx.beginPath(); ctx.ellipse(0,0,16,10,0,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='#222'; ctx.fillText('洗面',0,37);
+  }else if(text==='台所'){
+    ctx.strokeRect(-38,-18,76,36);
+    ctx.beginPath();ctx.arc(-17,0,8,0,Math.PI*2);ctx.stroke();
+    ctx.strokeRect(7,-9,20,18);
+    ctx.fillStyle='#222';ctx.fillText('台所',0,36);
+  }else if(text==='玄関'){
+    ctx.beginPath();ctx.moveTo(-35,18);ctx.lineTo(35,18);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-25,18);ctx.lineTo(-25,-22);ctx.lineTo(15,-22);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('玄関',0,39);
+  }else if(text==='ベッド'){
+    ctx.strokeRect(-38,-22,76,44); ctx.strokeRect(-32,-17,24,16);
+    ctx.fillStyle='#222';ctx.fillText('ベッド',0,41);
   }else if(text==='手すり'){
-    ctx.beginPath();ctx.moveTo(-30,0);ctx.lineTo(30,0);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(-25,0);ctx.lineTo(-25,12);ctx.moveTo(25,0);ctx.lineTo(25,12);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-34,0);ctx.lineTo(34,0);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-28,0);ctx.lineTo(-28,14);ctx.moveTo(28,0);ctx.lineTo(28,14);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('手すり',0,34);
   }else if(text==='段差'){
-    ctx.beginPath();ctx.moveTo(-28,-8);ctx.lineTo(0,-8);ctx.lineTo(0,8);ctx.lineTo(28,8);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-32,-10);ctx.lineTo(0,-10);ctx.lineTo(0,10);ctx.lineTo(32,10);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('段差',0,35);
   }else if(text==='階段'){
-    for(let i=0;i<5;i++) ctx.strokeRect(-30+i*12,-20+i*5,12,40-i*10);
+    for(let i=0;i<6;i++){ctx.beginPath();ctx.moveTo(-34+i*12,-24);ctx.lineTo(-34+i*12,24);ctx.stroke();}
+    ctx.strokeRect(-34,-24,68,48);ctx.fillStyle='#222';ctx.fillText('階段',0,42);
   }else if(text==='車いす'){
-    ctx.beginPath();ctx.arc(-8,8,15,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(12,-10,6,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(4,-3);ctx.lineTo(10,12);ctx.lineTo(-6,12);ctx.stroke();
+    ctx.beginPath();ctx.arc(-7,8,16,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(10,-15,6,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(5,-8);ctx.lineTo(12,10);ctx.lineTo(-4,10);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('車いす',0,42);
   }else if(text==='歩行器'){
-    ctx.strokeRect(-22,-18,44,36);
-    ctx.beginPath();ctx.arc(-18,22,4,0,Math.PI*2);ctx.arc(18,22,4,0,Math.PI*2);ctx.stroke();
+    ctx.strokeRect(-24,-20,48,38);
+    ctx.beginPath();ctx.arc(-19,23,4,0,Math.PI*2);ctx.arc(19,23,4,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('歩行器',0,43);
   }else{
-    ctx.font='16px sans-serif';
-    const w=Math.max(52,ctx.measureText(text).width+20);
-    ctx.strokeRect(-w/2,-18,w,36);
+    ctx.strokeRect(-34,-20,68,40);
+    ctx.fillStyle='#222';ctx.fillText(text,0,5);
   }
-  ctx.fillStyle='#222';ctx.font='15px sans-serif';ctx.textAlign='center';
-  ctx.fillText(text,0,5);
   ctx.restore();
 }
 
+function hitTest(p){
+  for(let i=actions.length-1;i>=0;i--){
+    const a=actions[i];
+    if((a.type==='item'||a.type==='text') && Math.abs(p.x-a.x)<=55 && Math.abs(p.y-a.y)<=45) return i;
+  }
+  return -1;
+}
+
+function drawSelection(a){
+  if(a.x===undefined) return;
+  ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+  ctx.strokeRect(a.x-50,a.y-48,100,96);ctx.restore();
+}
+
+function deleteSelected(){
+  if(selectedIndex<0){ alert('「移動」で削除したい設備や文字を選んでください。'); return; }
+  actions.splice(selectedIndex,1); selectedIndex=-1; draw();
+}
 function drawPreview(a,b){
   ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=3;ctx.setLineDash([8,5]);
   if(mode==='room'){
@@ -250,9 +311,9 @@ function drawPreview(a,b){
   ctx.restore();
 }
 
-function undo(){ actions.pop(); draw(); }
+function undo(){ actions.pop(); selectedIndex=-1; draw(); }
 function clearAll(){
-  if(confirm('全部消去しますか？')){ actions=[]; draw(); }
+  if(confirm('全部消去しますか？')){ actions=[]; selectedIndex=-1; draw(); }
 }
 function saveImage(){
   draw();
