@@ -2,45 +2,267 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <meta name="theme-color" content="#1976d2">
 <title>ケアマネ間取り図</title>
 <style>
-*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,"Yu Gothic",sans-serif;background:#f5f7fa;color:#222}
-header{background:#1976d2;color:white;padding:12px 16px;font-weight:700;font-size:20px}
-.toolbar{padding:10px;display:flex;gap:7px;flex-wrap:wrap;background:white;border-bottom:1px solid #ddd}
-button{border:0;border-radius:8px;padding:10px 12px;font-size:15px;background:#e8eef5;cursor:pointer}
-button.primary{background:#1976d2;color:#fff} button.danger{background:#fff0f0;color:#b00020}
-.help{padding:8px 12px;font-size:13px;color:#555;background:#fff}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Yu Gothic",Meiryo,sans-serif;background:#f4f7fb;color:#222}
+header{background:#1976d2;color:#fff;padding:12px 16px;font-weight:700;font-size:20px}
+.toolbar{padding:10px;display:flex;gap:7px;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;position:sticky;top:0;z-index:10}
+button,select{border:0;border-radius:9px;padding:10px 12px;font-size:15px;background:#e9eef5;cursor:pointer}
+button.active{background:#1976d2;color:#fff}
+button.danger{background:#ffe8e8;color:#b00020}
+button.save{background:#e7f5ea;color:#126b2e}
+.help{padding:8px 12px;font-size:13px;color:#555;background:#fff;border-bottom:1px solid #e5e5e5}
 #wrap{padding:10px;overflow:auto}
-canvas{display:block;background:#fff;border:1px solid #bbb;touch-action:none;box-shadow:0 2px 8px #0001}
-.note{padding:8px 12px;font-size:12px;color:#666}
+canvas{display:block;background:#fff;border:1px solid #bbb;touch-action:none;box-shadow:0 2px 8px #0001;max-width:none}
+.note{padding:4px 12px 12px;font-size:12px;color:#666}
+.group{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.label{font-size:12px;color:#555;padding:0 2px}
+@media(max-width:700px){
+  header{font-size:18px}
+  button,select{font-size:14px;padding:9px 10px}
+  .toolbar{gap:5px}
+}
 </style>
 </head>
 <body>
 <header>ケアマネ間取り図</header>
+
 <div class="toolbar">
-<button class="primary" onclick="mode='room'">部屋を描く</button>
-<button onclick="mode='door'">ドア</button>
-<button onclick="mode='label'">文字</button>
-<button onclick="undo()">1つ戻す</button>
-<button onclick="saveImage()">画像保存</button>
-<button class="danger" onclick="clearAll()">全消去</button>
+  <div class="group">
+    <span class="label">描く</span>
+    <button id="roomBtn" class="active" onclick="setMode('room')">部屋</button>
+    <button onclick="setMode('line')">壁・線</button>
+    <button onclick="setMode('door')">ドア</button>
+    <button onclick="setMode('window')">窓</button>
+  </div>
+
+  <div class="group">
+    <span class="label">置く</span>
+    <select id="itemSelect" onchange="setItem(this.value)">
+      <option value="">設備を選ぶ</option>
+      <option>玄関</option>
+      <option>トイレ</option>
+      <option>浴室</option>
+      <option>洗面</option>
+      <option>台所</option>
+      <option>居室</option>
+      <option>寝室</option>
+      <option>ベッド</option>
+      <option>手すり</option>
+      <option>段差</option>
+      <option>階段</option>
+      <option>車いす</option>
+      <option>歩行器</option>
+    </select>
+    <button onclick="setMode('text')">文字</button>
+  </div>
+
+  <div class="group">
+    <button onclick="undo()">1つ戻す</button>
+    <button class="save" onclick="saveImage()">画像保存</button>
+    <button class="danger" onclick="clearAll()">全消去</button>
+  </div>
 </div>
-<div class="help">「部屋を描く」→ 画面を指でなぞるだけ。ドアや「玄関・居室・トイレ」などの文字も追加できます。</div>
-<div id="wrap"><canvas id="c" width="900" height="650"></canvas></div>
-<div class="note">利用者名など個人情報を入れた画像の取り扱いにはご注意ください。</div>
+
+<div class="help" id="help">
+「部屋」→ 始点から終点までドラッグして四角を作成。設備は選んでから置きたい場所をタップしてください。
+</div>
+
+<div id="wrap"><canvas id="c" width="1000" height="700"></canvas></div>
+<div class="note">※ 利用者名など個人情報を入れた画像の取り扱いには十分ご注意ください。</div>
+
 <script>
-const c=document.getElementById('c'),x=c.getContext('2d'); let mode='room',start=null,items=[];
-function pos(e){const r=c.getBoundingClientRect(),p=e.touches?e.touches[0]:e;return {x:(p.clientX-r.left)*c.width/r.width,y:(p.clientY-r.top)*c.height/r.height}}
-function grid(){x.clearRect(0,0,c.width,c.height);x.strokeStyle='#edf0f2';x.lineWidth=1;for(let i=0;i<c.width;i+=25){x.beginPath();x.moveTo(i,0);x.lineTo(i,c.height);x.stroke()}for(let i=0;i<c.height;i+=25){x.beginPath();x.moveTo(0,i);x.lineTo(c.width,i);x.stroke()}}
-function redraw(){grid();items.forEach(a=>{x.strokeStyle='#222';x.fillStyle='#222';x.lineWidth=4;if(a.t==='room')x.strokeRect(a.x,a.y,a.w,a.h);if(a.t==='door'){x.beginPath();x.moveTo(a.x,a.y);x.lineTo(a.x+60,a.y);x.stroke();x.beginPath();x.arc(a.x,a.y,60,0,Math.PI/2);x.stroke()}if(a.t==='label'){x.font='28px sans-serif';x.fillText(a.s,a.x,a.y)}})}
-function down(e){e.preventDefault();let p=pos(e);if(mode==='label'){let s=prompt('文字を入力（例：玄関、居室、トイレ）');if(s){items.push({t:'label',x:p.x,y:p.y,s});redraw()}return}if(mode==='door'){items.push({t:'door',x:p.x,y:p.y});redraw();return}start=p}
-function up(e){if(!start||mode!=='room')return;e.preventDefault();let p=pos(e);items.push({t:'room',x:start.x,y:start.y,w:p.x-start.x,h:p.y-start.y});start=null;redraw()}
-c.addEventListener('mousedown',down);c.addEventListener('mouseup',up);c.addEventListener('touchstart',down,{passive:false});c.addEventListener('touchend',e=>{let t=e.changedTouches[0],r=c.getBoundingClientRect();if(start){items.push({t:'room',x:start.x,y:start.y,w:(t.clientX-r.left)*c.width/r.width-start.x,h:(t.clientY-r.top)*c.height/r.height-start.y});start=null;redraw()}},{passive:false});
-function undo(){items.pop();redraw()} function clearAll(){if(confirm('全部消しますか？')){items=[];redraw()}}
-function saveImage(){redraw();let a=document.createElement('a');a.download='間取り図.png';a.href=c.toDataURL('image/png');a.click()}
-function resize(){let max=Math.min(window.innerWidth-20,900);c.style.width=max+'px';c.style.height=(max*650/900)+'px'} window.addEventListener('resize',resize);resize();redraw();
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const help = document.getElementById('help');
+
+let mode='room', selectedItem='', start=null, temp=null;
+let actions=[];
+
+function setMode(m){
+  mode=m; selectedItem='';
+  document.getElementById('itemSelect').value='';
+  document.querySelectorAll('.toolbar button').forEach(b=>b.classList.remove('active'));
+  if(m==='room') document.getElementById('roomBtn').classList.add('active');
+  const map={
+    room:'ドラッグして部屋の四角を作ります。',
+    line:'ドラッグして壁・線を引きます。',
+    door:'ドラッグしてドアを配置します。',
+    window:'ドラッグして窓を配置します。',
+    text:'置きたい場所をタップして文字を入力します。'
+  };
+  help.textContent=map[m]||'';
+}
+
+function setItem(v){
+  if(!v) return;
+  mode='item'; selectedItem=v;
+  help.textContent=`「${v}」を置きたい場所をタップしてください。`;
+}
+
+function pos(e){
+  const r=c.getBoundingClientRect();
+  const p=e.touches?e.touches[0]:e;
+  return {
+    x:(p.clientX-r.left)*(c.width/r.width),
+    y:(p.clientY-r.top)*(c.height/r.height)
+  };
+}
+
+function snap(v){ return Math.round(v/25)*25; }
+function sp(e){ const p=pos(e); return {x:snap(p.x),y:snap(p.y)}; }
+
+function down(e){
+  e.preventDefault();
+  const p=sp(e);
+  if(mode==='item'){
+    actions.push({type:'item',x:p.x,y:p.y,text:selectedItem});
+    draw(); return;
+  }
+  if(mode==='text'){
+    const t=prompt('文字を入力してください');
+    if(t){ actions.push({type:'text',x:p.x,y:p.y,text:t}); draw(); }
+    return;
+  }
+  start=p; temp=p;
+}
+
+function move(e){
+  if(!start) return;
+  e.preventDefault();
+  temp=sp(e); draw();
+  drawPreview(start,temp);
+}
+
+function up(e){
+  if(!start) return;
+  e.preventDefault();
+  const end=sp(e);
+  actions.push({type:mode,x1:start.x,y1:start.y,x2:end.x,y2:end.y});
+  start=null; temp=null; draw();
+}
+
+c.addEventListener('mousedown',down);
+c.addEventListener('mousemove',move);
+window.addEventListener('mouseup',up);
+c.addEventListener('touchstart',down,{passive:false});
+c.addEventListener('touchmove',move,{passive:false});
+window.addEventListener('touchend',up,{passive:false});
+
+function drawGrid(){
+  ctx.clearRect(0,0,c.width,c.height);
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
+  ctx.lineWidth=1; ctx.strokeStyle='#edf1f5';
+  for(let x=0;x<=c.width;x+=25){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke()}
+  for(let y=0;y<=c.height;y+=25){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke()}
+  ctx.strokeStyle='#d7dde5';
+  for(let x=0;x<=c.width;x+=100){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke()}
+  for(let y=0;y<=c.height;y+=100){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke()}
+}
+
+function draw(){
+  drawGrid();
+  actions.forEach(a=>drawAction(a));
+}
+
+function drawAction(a){
+  ctx.save();
+  ctx.strokeStyle='#222'; ctx.fillStyle='#222'; ctx.lineWidth=4; ctx.font='18px sans-serif';
+  if(a.type==='room'){
+    const x=Math.min(a.x1,a.x2), y=Math.min(a.y1,a.y2);
+    const w=Math.abs(a.x2-a.x1), h=Math.abs(a.y2-a.y1);
+    ctx.strokeRect(x,y,w,h);
+  }else if(a.type==='line'){
+    ctx.beginPath();ctx.moveTo(a.x1,a.y1);ctx.lineTo(a.x2,a.y2);ctx.stroke();
+  }else if(a.type==='door'){
+    drawDoor(a.x1,a.y1,a.x2,a.y2);
+  }else if(a.type==='window'){
+    drawWindow(a.x1,a.y1,a.x2,a.y2);
+  }else if(a.type==='text'){
+    ctx.fillText(a.text,a.x,a.y);
+  }else if(a.type==='item'){
+    drawItem(a.text,a.x,a.y);
+  }
+  ctx.restore();
+}
+
+function drawDoor(x1,y1,x2,y2){
+  ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  const r=Math.hypot(x2-x1,y2-y1);
+  if(r<5) return;
+  const ang=Math.atan2(y2-y1,x2-x1);
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.arc(x1,y1,r,ang,ang+Math.PI/2,false);
+  ctx.stroke();
+}
+
+function drawWindow(x1,y1,x2,y2){
+  ctx.lineWidth=6;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+}
+
+function drawItem(text,x,y){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.strokeStyle='#222';ctx.fillStyle='#fff';ctx.lineWidth=2;
+  if(text==='ベッド'){
+    ctx.strokeRect(-35,-18,70,36);
+    ctx.strokeRect(-30,-14,22,14);
+  }else if(text==='手すり'){
+    ctx.beginPath();ctx.moveTo(-30,0);ctx.lineTo(30,0);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-25,0);ctx.lineTo(-25,12);ctx.moveTo(25,0);ctx.lineTo(25,12);ctx.stroke();
+  }else if(text==='段差'){
+    ctx.beginPath();ctx.moveTo(-28,-8);ctx.lineTo(0,-8);ctx.lineTo(0,8);ctx.lineTo(28,8);ctx.stroke();
+  }else if(text==='階段'){
+    for(let i=0;i<5;i++) ctx.strokeRect(-30+i*12,-20+i*5,12,40-i*10);
+  }else if(text==='車いす'){
+    ctx.beginPath();ctx.arc(-8,8,15,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(12,-10,6,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(4,-3);ctx.lineTo(10,12);ctx.lineTo(-6,12);ctx.stroke();
+  }else if(text==='歩行器'){
+    ctx.strokeRect(-22,-18,44,36);
+    ctx.beginPath();ctx.arc(-18,22,4,0,Math.PI*2);ctx.arc(18,22,4,0,Math.PI*2);ctx.stroke();
+  }else{
+    ctx.font='16px sans-serif';
+    const w=Math.max(52,ctx.measureText(text).width+20);
+    ctx.strokeRect(-w/2,-18,w,36);
+  }
+  ctx.fillStyle='#222';ctx.font='15px sans-serif';ctx.textAlign='center';
+  ctx.fillText(text,0,5);
+  ctx.restore();
+}
+
+function drawPreview(a,b){
+  ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=3;ctx.setLineDash([8,5]);
+  if(mode==='room'){
+    const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);
+    ctx.strokeRect(x,y,Math.abs(b.x-a.x),Math.abs(b.y-a.y));
+  }else{
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function undo(){ actions.pop(); draw(); }
+function clearAll(){
+  if(confirm('全部消去しますか？')){ actions=[]; draw(); }
+}
+function saveImage(){
+  draw();
+  const link=document.createElement('a');
+  link.download='care-manager-map.png';
+  link.href=c.toDataURL('image/png');
+  link.click();
+}
+
+draw();
 </script>
 </body>
 </html>
