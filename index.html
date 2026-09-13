@@ -2,28 +2,31 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1976d2">
 <title>ケアマネ間取り図</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,"Yu Gothic",Meiryo,sans-serif;background:#f4f7fb;color:#222}
-header{background:#1976d2;color:#fff;padding:12px 16px;font-weight:700;font-size:20px}
-.toolbar{padding:10px;display:flex;gap:7px;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ddd;position:sticky;top:0;z-index:10}
-button,select{border:0;border-radius:9px;padding:10px 12px;font-size:15px;background:#e9eef5;cursor:pointer}
-button.active{background:#1976d2;color:#fff}
-button.danger{background:#ffe8e8;color:#b00020}
-button.save{background:#e7f5ea;color:#126b2e}
-.help{padding:8px 12px;font-size:13px;color:#555;background:#fff;border-bottom:1px solid #e5e5e5}
-#wrap{padding:10px;overflow:auto}
-canvas{display:block;background:#fff;border:1px solid #bbb;touch-action:none;box-shadow:0 2px 8px #0001;max-width:none}
-.note{padding:4px 12px 12px;font-size:12px;color:#666}
+:root{--blue:#1976d2;--bg:#f4f7fb;--line:#dbe2ea;--text:#222}
+body{margin:0;font-family:system-ui,-apple-system,"Yu Gothic",Meiryo,sans-serif;background:var(--bg);color:var(--text)}
+header{background:var(--blue);color:#fff;padding:12px 14px;font-weight:700;font-size:20px}
+.toolbar{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #ddd;padding:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+button,select{border:1px solid #d7dee8;border-radius:10px;padding:10px 12px;font-size:15px;background:#eef3f8;color:#222}
+button.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+button.primary{background:#eaf3ff}
+button.success{background:#e8f6ec}
+button.danger{background:#ffecec;color:#a40018}
 .group{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-.label{font-size:12px;color:#555;padding:0 2px}
+.label{font-size:12px;color:#666}
+.help{background:#fff;padding:8px 12px;border-bottom:1px solid #e6e6e6;font-size:13px;color:#555}
+#wrap{padding:10px;overflow:auto;-webkit-overflow-scrolling:touch}
+canvas{display:block;background:#fff;border:1px solid #aaa;box-shadow:0 2px 9px #0001;touch-action:none}
+.note{font-size:12px;color:#666;padding:0 12px 14px}
 @media(max-width:700px){
   header{font-size:18px}
-  button,select{font-size:14px;padding:9px 10px}
-  .toolbar{gap:5px}
+  .toolbar{gap:5px;padding:7px}
+  button,select{font-size:14px;padding:10px}
+  .label{display:none}
 }
 </style>
 </head>
@@ -33,296 +36,213 @@ canvas{display:block;background:#fff;border:1px solid #bbb;touch-action:none;box
 <div class="toolbar">
   <div class="group">
     <span class="label">描く</span>
-    <button id="roomBtn" class="active" onclick="setMode('room')">部屋</button>
-    <button onclick="setMode('line')">壁・線</button>
-    <button onclick="setMode('door')">ドア</button>
-    <button onclick="setMode('window')">窓</button>
+    <button id="roomBtn" class="active" onclick="setMode('room',this)">部屋</button>
+    <button onclick="setMode('line',this)">壁・線</button>
+    <button onclick="setMode('door',this)">ドア</button>
+    <button onclick="setMode('window',this)">窓</button>
   </div>
 
   <div class="group">
     <span class="label">置く</span>
     <select id="itemSelect" onchange="setItem(this.value)">
       <option value="">設備を選ぶ</option>
-      <option>玄関</option>
-      <option>トイレ</option>
-      <option>浴室</option>
-      <option>洗面</option>
-      <option>台所</option>
-      <option>居室</option>
-      <option>寝室</option>
-      <option>ベッド</option>
-      <option>手すり</option>
-      <option>段差</option>
-      <option>階段</option>
-      <option>車いす</option>
-      <option>歩行器</option>
+      <option>玄関</option><option>トイレ（洋式）</option><option>トイレ（和式）</option><option>ポータブルトイレ</option><option>浴室</option><option>洗面</option>
+      <option>台所</option><option>ベッド</option><option>手すり</option><option>段差</option>
+      <option>階段</option><option>車いす</option><option>歩行器</option>
     </select>
-    <button onclick="setMode('text')">文字</button>
-    <button onclick="setMode('select')">移動</button>
+    <button onclick="setMode('text',this)">文字</button>
+    <button onclick="setMode('select',this)">移動</button>
     <button onclick="deleteSelected()">選択削除</button>
   </div>
 
   <div class="group">
     <button onclick="undo()">1つ戻す</button>
-    <button class="save" onclick="saveImage()">画像保存</button>
+    <button class="success" onclick="saveImage()">画像保存</button>
     <button class="danger" onclick="clearAll()">全消去</button>
   </div>
 </div>
 
-<div class="help" id="help">
-「部屋」→ 始点から終点までドラッグして四角を作成。設備は選んでから置きたい場所をタップしてください。
-</div>
-
-<div id="wrap"><canvas id="c" width="1000" height="700"></canvas></div>
-<div class="note">※ 利用者名など個人情報を入れた画像の取り扱いには十分ご注意ください。</div>
+<div class="help" id="help">「部屋」：始点から終点までドラッグして四角を作ります。</div>
+<div id="wrap"><canvas id="c" width="1100" height="760"></canvas></div>
+<div class="note">※ 利用者名など個人情報を含む画像の保存・共有にはご注意ください。</div>
 
 <script>
-const c = document.getElementById('c');
-const ctx = c.getContext('2d');
-const help = document.getElementById('help');
+const c=document.getElementById('c'),ctx=c.getContext('2d'),help=document.getElementById('help');
+let mode='room',selectedItem='',start=null,temp=null,actions=[],selectedIndex=-1,dragOffset=null;
 
-let mode='room', selectedItem='', start=null, temp=null;
-let actions=[];
-let selectedIndex=-1, dragOffset=null;
-
-function setMode(m){
-  mode=m; selectedItem='';
-  document.getElementById('itemSelect').value='';
+function setMode(m,btn){
+  mode=m; selectedItem=''; document.getElementById('itemSelect').value='';
   document.querySelectorAll('.toolbar button').forEach(b=>b.classList.remove('active'));
-  if(m==='room') document.getElementById('roomBtn').classList.add('active');
-  const map={
-    room:'ドラッグして部屋の四角を作ります。',
-    line:'ドラッグして壁・線を引きます。',
-    door:'ドラッグしてドアを配置します。',
-    window:'ドラッグして窓を配置します。',
-    text:'置きたい場所をタップして文字を入力します。',
-    select:'設備や文字をクリックして選択し、そのままドラッグして移動できます。'
+  if(btn) btn.classList.add('active');
+  const t={
+    room:'「部屋」：ドラッグして部屋の四角を作ります。',
+    line:'「壁・線」：ドラッグして壁や仕切り線を引きます。',
+    door:'「ドア」：ドラッグして開き戸を作ります。',
+    window:'「窓」：ドラッグして窓を作ります。',
+    text:'「文字」：置きたい場所をタップして、部屋名などを入力します。',
+    select:'「移動」：設備や文字をタップして選択し、そのままドラッグで移動できます。'
   };
-  help.textContent=map[m]||'';
+  help.textContent=t[m]||'';
+  if(m!=='select') selectedIndex=-1;
+  draw();
 }
-
 function setItem(v){
-  if(!v) return;
-  mode='item'; selectedItem=v;
+  if(!v)return;
+  mode='item';selectedItem=v;selectedIndex=-1;
+  document.querySelectorAll('.toolbar button').forEach(b=>b.classList.remove('active'));
   help.textContent=`「${v}」を置きたい場所をタップしてください。`;
 }
-
-function pos(e){
-  const r=c.getBoundingClientRect();
-  const p=e.touches?e.touches[0]:e;
-  return {
-    x:(p.clientX-r.left)*(c.width/r.width),
-    y:(p.clientY-r.top)*(c.height/r.height)
-  };
+function pnt(e){
+  const r=c.getBoundingClientRect(),p=e.touches?e.touches[0]:e;
+  return {x:(p.clientX-r.left)*(c.width/r.width),y:(p.clientY-r.top)*(c.height/r.height)};
 }
-
-function snap(v){ return Math.round(v/25)*25; }
-function sp(e){ const p=pos(e); return {x:snap(p.x),y:snap(p.y)}; }
+function snap(v){return Math.round(v/25)*25}
+function sp(e){const p=pnt(e);return{x:snap(p.x),y:snap(p.y)}}
 
 function down(e){
-  e.preventDefault();
-  const p=sp(e);
+  e.preventDefault(); const p=sp(e);
   if(mode==='select'){
     selectedIndex=hitTest(p);
     if(selectedIndex>=0){
       const a=actions[selectedIndex];
-      if(a.x!==undefined) dragOffset={x:p.x-a.x,y:p.y-a.y};
-    } else dragOffset=null;
-    draw(); return;
+      if(a.x!==undefined)dragOffset={x:p.x-a.x,y:p.y-a.y};
+    }else dragOffset=null;
+    draw();return;
   }
-  if(mode==='item'){
-    actions.push({type:'item',x:p.x,y:p.y,text:selectedItem});
-    draw(); return;
-  }
+  if(mode==='item'){actions.push({type:'item',x:p.x,y:p.y,text:selectedItem});draw();return}
   if(mode==='text'){
-    const t=prompt('文字を入力してください');
-    if(t){ actions.push({type:'text',x:p.x,y:p.y,text:t}); draw(); }
+    const t=prompt('文字を入力してください（例：居間、寝室、和室、LDK）');
+    if(t){actions.push({type:'text',x:p.x,y:p.y,text:t});draw()}
     return;
   }
-  start=p; temp=p;
+  start=p;temp=p;
 }
-
 function move(e){
-  e.preventDefault();
-  const p=sp(e);
-  if(mode==='select' && selectedIndex>=0 && dragOffset){
+  e.preventDefault(); const p=sp(e);
+  if(mode==='select'&&selectedIndex>=0&&dragOffset){
     const a=actions[selectedIndex];
-    if(a.x!==undefined){ a.x=p.x-dragOffset.x; a.y=p.y-dragOffset.y; draw(); }
+    if(a.x!==undefined){a.x=p.x-dragOffset.x;a.y=p.y-dragOffset.y;draw()}
     return;
   }
-  if(!start) return;
-  temp=p; draw();
-  drawPreview(start,temp);
+  if(!start)return;
+  temp=p;draw();drawPreview(start,temp);
 }
-
 function up(e){
-  if(mode==='select'){ dragOffset=null; return; }
-  if(!start) return;
-  e.preventDefault();
-  const end=sp(e);
+  if(mode==='select'){dragOffset=null;return}
+  if(!start)return;
+  e.preventDefault(); const end=sp(e);
   actions.push({type:mode,x1:start.x,y1:start.y,x2:end.x,y2:end.y});
-  start=null; temp=null; draw();
+  start=null;temp=null;draw();
 }
-
-c.addEventListener('mousedown',down);
-c.addEventListener('mousemove',move);
-window.addEventListener('mouseup',up);
-c.addEventListener('touchstart',down,{passive:false});
-c.addEventListener('touchmove',move,{passive:false});
-window.addEventListener('touchend',up,{passive:false});
+c.addEventListener('mousedown',down);c.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
+c.addEventListener('touchstart',down,{passive:false});c.addEventListener('touchmove',move,{passive:false});window.addEventListener('touchend',up,{passive:false});
 
 function drawGrid(){
-  ctx.clearRect(0,0,c.width,c.height);
-  ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
-  ctx.lineWidth=1; ctx.strokeStyle='#edf1f5';
+  ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+  ctx.lineWidth=1;ctx.strokeStyle='#edf1f5';
   for(let x=0;x<=c.width;x+=25){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke()}
   for(let y=0;y<=c.height;y+=25){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke()}
   ctx.strokeStyle='#d7dde5';
   for(let x=0;x<=c.width;x+=100){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke()}
   for(let y=0;y<=c.height;y+=100){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke()}
 }
-
-function draw(){
-  drawGrid();
-  actions.forEach((a,i)=>{ drawAction(a); if(i===selectedIndex) drawSelection(a); });
-}
-
+function draw(){drawGrid();actions.forEach((a,i)=>{drawAction(a);if(i===selectedIndex)drawSelection(a)})}
 function drawAction(a){
-  ctx.save();
-  ctx.strokeStyle='#222'; ctx.fillStyle='#222'; ctx.lineWidth=4; ctx.font='18px sans-serif';
+  ctx.save();ctx.strokeStyle='#222';ctx.fillStyle='#222';ctx.lineWidth=4;ctx.font='18px sans-serif';
   if(a.type==='room'){
-    const x=Math.min(a.x1,a.x2), y=Math.min(a.y1,a.y2);
-    const w=Math.abs(a.x2-a.x1), h=Math.abs(a.y2-a.y1);
+    const x=Math.min(a.x1,a.x2),y=Math.min(a.y1,a.y2),w=Math.abs(a.x2-a.x1),h=Math.abs(a.y2-a.y1);
     ctx.strokeRect(x,y,w,h);
   }else if(a.type==='line'){
     ctx.beginPath();ctx.moveTo(a.x1,a.y1);ctx.lineTo(a.x2,a.y2);ctx.stroke();
-  }else if(a.type==='door'){
-    drawDoor(a.x1,a.y1,a.x2,a.y2);
-  }else if(a.type==='window'){
-    drawWindow(a.x1,a.y1,a.x2,a.y2);
-  }else if(a.type==='text'){
-    ctx.fillText(a.text,a.x,a.y);
-  }else if(a.type==='item'){
-    drawItem(a.text,a.x,a.y);
-  }
+  }else if(a.type==='door'){drawDoor(a.x1,a.y1,a.x2,a.y2)}
+  else if(a.type==='window'){drawWindow(a.x1,a.y1,a.x2,a.y2)}
+  else if(a.type==='text'){ctx.fillText(a.text,a.x,a.y)}
+  else if(a.type==='item'){drawItem(a.text,a.x,a.y)}
   ctx.restore();
 }
-
 function drawDoor(x1,y1,x2,y2){
-  ctx.lineWidth=4;
-  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-  const r=Math.hypot(x2-x1,y2-y1);
-  if(r<5) return;
-  const ang=Math.atan2(y2-y1,x2-x1);
-  ctx.lineWidth=2;
-  ctx.beginPath();
-  ctx.arc(x1,y1,r,ang,ang+Math.PI/2,false);
-  ctx.stroke();
+  ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  const r=Math.hypot(x2-x1,y2-y1);if(r<5)return;
+  const ang=Math.atan2(y2-y1,x2-x1);ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(x1,y1,r,ang,ang+Math.PI/2,false);ctx.stroke();
 }
-
 function drawWindow(x1,y1,x2,y2){
-  ctx.lineWidth=6;
-  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-  ctx.strokeStyle='#fff'; ctx.lineWidth=2;
-  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
 }
-
 function drawItem(text,x,y){
-  ctx.save(); ctx.translate(x,y);
-  ctx.strokeStyle='#222'; ctx.fillStyle='#fff'; ctx.lineWidth=2;
-  ctx.font='14px sans-serif'; ctx.textAlign='center';
-
-  if(text==='トイレ'){
-    ctx.beginPath(); ctx.ellipse(0,5,15,20,0,0,Math.PI*2); ctx.stroke();
-    ctx.strokeRect(-13,-24,26,13);
-    ctx.fillStyle='#222'; ctx.fillText('WC',0,38);
+  ctx.save();ctx.translate(x,y);ctx.strokeStyle='#222';ctx.fillStyle='#fff';ctx.lineWidth=2;ctx.font='14px sans-serif';ctx.textAlign='center';
+  if(text==='トイレ' || text==='トイレ（洋式）'){
+    ctx.strokeRect(-13,-28,26,14);ctx.beginPath();ctx.ellipse(0,7,15,21,0,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('WC',0,42);
+  }else if(text==='トイレ（和式）'){
+    ctx.strokeRect(-18,-30,36,60);
+    ctx.beginPath();ctx.ellipse(0,2,8,20,0,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-12,-20);ctx.lineTo(12,-20);ctx.moveTo(-12,22);ctx.lineTo(12,22);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('和式',0,48);
+  }else if(text==='ポータブルトイレ'){
+    ctx.strokeRect(-24,-24,48,48);
+    ctx.beginPath();ctx.ellipse(0,-3,15,11,0,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-24,24);ctx.lineTo(-30,34);ctx.moveTo(24,24);ctx.lineTo(30,34);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('ポータブル',0,52);
   }else if(text==='浴室'){
-    ctx.strokeRect(-34,-22,68,44);
-    ctx.beginPath(); ctx.roundRect(-25,-14,50,28,10); ctx.stroke();
-    ctx.fillStyle='#222'; ctx.fillText('浴室',0,39);
+    ctx.strokeRect(-38,-24,76,48);ctx.beginPath();ctx.roundRect(-28,-15,56,30,9);ctx.stroke();ctx.fillStyle='#222';ctx.fillText('浴室',0,43);
   }else if(text==='洗面'){
-    ctx.strokeRect(-25,-20,50,40);
-    ctx.beginPath(); ctx.ellipse(0,0,16,10,0,0,Math.PI*2); ctx.stroke();
-    ctx.fillStyle='#222'; ctx.fillText('洗面',0,37);
+    ctx.strokeRect(-27,-22,54,44);ctx.beginPath();ctx.ellipse(0,0,17,10,0,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#222';ctx.fillText('洗面',0,40);
   }else if(text==='台所'){
-    ctx.strokeRect(-38,-18,76,36);
-    ctx.beginPath();ctx.arc(-17,0,8,0,Math.PI*2);ctx.stroke();
-    ctx.strokeRect(7,-9,20,18);
-    ctx.fillStyle='#222';ctx.fillText('台所',0,36);
+    ctx.strokeRect(-40,-20,80,40);ctx.beginPath();ctx.arc(-18,0,8,0,Math.PI*2);ctx.stroke();ctx.strokeRect(8,-10,20,20);
+    ctx.fillStyle='#222';ctx.fillText('台所',0,40);
   }else if(text==='玄関'){
-    ctx.beginPath();ctx.moveTo(-35,18);ctx.lineTo(35,18);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(-25,18);ctx.lineTo(-25,-22);ctx.lineTo(15,-22);ctx.stroke();
-    ctx.fillStyle='#222';ctx.fillText('玄関',0,39);
+    ctx.beginPath();ctx.moveTo(-36,20);ctx.lineTo(36,20);ctx.stroke();ctx.beginPath();ctx.moveTo(-26,20);ctx.lineTo(-26,-24);ctx.lineTo(18,-24);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('玄関',0,43);
   }else if(text==='ベッド'){
-    ctx.strokeRect(-38,-22,76,44); ctx.strokeRect(-32,-17,24,16);
-    ctx.fillStyle='#222';ctx.fillText('ベッド',0,41);
+    ctx.strokeRect(-40,-24,80,48);ctx.strokeRect(-33,-18,26,17);ctx.beginPath();ctx.moveTo(-40,13);ctx.lineTo(40,13);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('ベッド',0,44);
   }else if(text==='手すり'){
-    ctx.beginPath();ctx.moveTo(-34,0);ctx.lineTo(34,0);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(-28,0);ctx.lineTo(-28,14);ctx.moveTo(28,0);ctx.lineTo(28,14);ctx.stroke();
-    ctx.fillStyle='#222';ctx.fillText('手すり',0,34);
+    ctx.beginPath();ctx.moveTo(-36,0);ctx.lineTo(36,0);ctx.stroke();ctx.beginPath();ctx.moveTo(-29,0);ctx.lineTo(-29,15);ctx.moveTo(29,0);ctx.lineTo(29,15);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('手すり',0,37);
   }else if(text==='段差'){
-    ctx.beginPath();ctx.moveTo(-32,-10);ctx.lineTo(0,-10);ctx.lineTo(0,10);ctx.lineTo(32,10);ctx.stroke();
-    ctx.fillStyle='#222';ctx.fillText('段差',0,35);
+    ctx.beginPath();ctx.moveTo(-34,-10);ctx.lineTo(0,-10);ctx.lineTo(0,10);ctx.lineTo(34,10);ctx.stroke();ctx.fillStyle='#222';ctx.fillText('段差',0,38);
   }else if(text==='階段'){
-    for(let i=0;i<6;i++){ctx.beginPath();ctx.moveTo(-34+i*12,-24);ctx.lineTo(-34+i*12,24);ctx.stroke();}
-    ctx.strokeRect(-34,-24,68,48);ctx.fillStyle='#222';ctx.fillText('階段',0,42);
+    ctx.strokeRect(-36,-24,72,48);for(let i=1;i<6;i++){ctx.beginPath();ctx.moveTo(-36+i*12,-24);ctx.lineTo(-36+i*12,24);ctx.stroke()}
+    ctx.fillStyle='#222';ctx.fillText('階段',0,44);
   }else if(text==='車いす'){
-    ctx.beginPath();ctx.arc(-7,8,16,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(10,-15,6,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(5,-8);ctx.lineTo(12,10);ctx.lineTo(-4,10);ctx.stroke();
-    ctx.fillStyle='#222';ctx.fillText('車いす',0,42);
+    ctx.beginPath();ctx.arc(-8,9,17,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(11,-16,6,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(6,-9);ctx.lineTo(13,11);ctx.lineTo(-5,11);ctx.stroke();ctx.fillStyle='#222';ctx.fillText('車いす',0,44);
   }else if(text==='歩行器'){
-    ctx.strokeRect(-24,-20,48,38);
-    ctx.beginPath();ctx.arc(-19,23,4,0,Math.PI*2);ctx.arc(19,23,4,0,Math.PI*2);ctx.stroke();
-    ctx.fillStyle='#222';ctx.fillText('歩行器',0,43);
-  }else{
-    ctx.strokeRect(-34,-20,68,40);
-    ctx.fillStyle='#222';ctx.fillText(text,0,5);
+    ctx.strokeRect(-25,-21,50,39);ctx.beginPath();ctx.arc(-19,24,4,0,Math.PI*2);ctx.arc(19,24,4,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='#222';ctx.fillText('歩行器',0,45);
   }
   ctx.restore();
 }
-
 function hitTest(p){
   for(let i=actions.length-1;i>=0;i--){
     const a=actions[i];
-    if((a.type==='item'||a.type==='text') && Math.abs(p.x-a.x)<=55 && Math.abs(p.y-a.y)<=45) return i;
+    if((a.type==='item'||a.type==='text')&&Math.abs(p.x-a.x)<=58&&Math.abs(p.y-a.y)<=50)return i;
   }
   return -1;
 }
-
 function drawSelection(a){
-  if(a.x===undefined) return;
-  ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=2;ctx.setLineDash([5,4]);
-  ctx.strokeRect(a.x-50,a.y-48,100,96);ctx.restore();
-}
-
-function deleteSelected(){
-  if(selectedIndex<0){ alert('「移動」で削除したい設備や文字を選んでください。'); return; }
-  actions.splice(selectedIndex,1); selectedIndex=-1; draw();
+  if(a.x===undefined)return;
+  ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.strokeRect(a.x-54,a.y-50,108,100);ctx.restore();
 }
 function drawPreview(a,b){
   ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=3;ctx.setLineDash([8,5]);
-  if(mode==='room'){
-    const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);
-    ctx.strokeRect(x,y,Math.abs(b.x-a.x),Math.abs(b.y-a.y));
-  }else{
-    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
-  }
+  if(mode==='room'){const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);ctx.strokeRect(x,y,Math.abs(b.x-a.x),Math.abs(b.y-a.y))}
+  else{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
   ctx.restore();
 }
-
-function undo(){ actions.pop(); selectedIndex=-1; draw(); }
-function clearAll(){
-  if(confirm('全部消去しますか？')){ actions=[]; selectedIndex=-1; draw(); }
+function deleteSelected(){
+  if(selectedIndex<0){alert('先に「移動」を押して、削除したい設備または文字を選んでください。');return}
+  actions.splice(selectedIndex,1);selectedIndex=-1;draw();
 }
+function undo(){actions.pop();selectedIndex=-1;draw()}
+function clearAll(){if(confirm('全部消去しますか？')){actions=[];selectedIndex=-1;draw()}}
 function saveImage(){
-  draw();
-  const link=document.createElement('a');
-  link.download='care-manager-map.png';
-  link.href=c.toDataURL('image/png');
-  link.click();
+  const old=selectedIndex;selectedIndex=-1;draw();
+  const a=document.createElement('a');a.download='care-manager-map.png';a.href=c.toDataURL('image/png');a.click();
+  selectedIndex=old;draw();
 }
-
 draw();
 </script>
 </body>
