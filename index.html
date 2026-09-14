@@ -313,4 +313,78 @@ function drawItem(text,x,y,rot=0){
     ctx.beginPath();ctx.moveTo(-25,0);ctx.lineTo(24,0);ctx.lineTo(15,-7);ctx.moveTo(24,0);ctx.lineTo(15,7);ctx.stroke();
   }else if(text==='廊下（L字）'){
     ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-33,-22);ctx.lineTo(-33,23);ctx.lineTo(34,23);ctx.stroke();
-    ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx
+    ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(-22,-21);ctx.lineTo(-22,12);ctx.lineTo(33,12);ctx.stroke();ctx.setLineDash([]);
+  }else if(text==='廊下（T字）'){
+    ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-37,-20);ctx.lineTo(37,-20);ctx.moveTo(0,-20);ctx.lineTo(0,30);ctx.stroke();
+    ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(-35,-9);ctx.lineTo(35,-9);ctx.moveTo(11,-9);ctx.lineTo(11,29);ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.restore();
+
+  // 名称は常に水平表示
+  ctx.fillStyle='#222';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+  const labels={
+    'トイレ（洋式）':'洋式WC','トイレ':'WC','トイレ（和式）':'和式WC','ポータブルトイレ':'ポータブル',
+    '浴室':'浴室','洗面':'洗面','台所':'台所','玄関':'玄関','ベッド':'ベッド','手すり（横）':'横手すり','手すり（縦）':'縦手すり',
+    '段差':'段差','勝手口':'勝手口','スロープ':'スロープ','門柱':'門柱','階段':'階段','廊下（L字）':'L字廊下','廊下（T字）':'T字廊下'
+  };
+  if(labels[text])ctx.fillText(labels[text],0,42);
+  ctx.restore();
+}
+function pointSegDist(px,py,x1,y1,x2,y2){
+  const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;
+  if(!l2)return Math.hypot(px-x1,py-y1);
+  let t=((px-x1)*dx+(py-y1)*dy)/l2;t=Math.max(0,Math.min(1,t));
+  return Math.hypot(px-(x1+t*dx),py-(y1+t*dy));
+}
+function hitTest(p){
+  for(let i=actions.length-1;i>=0;i--){
+    const a=actions[i];
+    if((a.type==='item'||a.type==='text')&&Math.abs(p.x-a.x)<=58&&Math.abs(p.y-a.y)<=58)return i;
+    if(a.type==='door'&&pointSegDist(p.x,p.y,a.x1,a.y1,a.x2,a.y2)<=22)return i;
+  }
+  return -1;
+}
+function drawSelection(a){
+  ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+  if(a.type==='door'){
+    const pad=14,x=Math.min(a.x1,a.x2)-pad,y=Math.min(a.y1,a.y2)-pad;
+    ctx.strokeRect(x,y,Math.abs(a.x2-a.x1)+pad*2,Math.abs(a.y2-a.y1)+pad*2);
+  }else if(a.x!==undefined){
+    ctx.translate(a.x,a.y);ctx.rotate(((a.rot||0)*Math.PI)/180);ctx.strokeRect(-54,-50,108,100);
+  }
+  ctx.restore();
+}
+function rotateSelected(){
+  if(selectedIndex<0){alert('先に「移動」で設備を選択してください。');return}
+  const a=actions[selectedIndex];
+  if(a.type!=='item'){alert('回転できるのは設備です。');return}
+  a.rot=((a.rot||0)+90)%360;draw();
+}
+function flipDoor(){
+  if(selectedIndex<0){alert('先に「移動」を押して、反転したいドアを選択してください。');return}
+  const a=actions[selectedIndex];
+  if(a.type!=='door'){alert('「ドア反転」はドアを選択した時に使えます。');return}
+  a.flip=!a.flip;draw();
+  help.textContent='ドアの開く向きを反転しました。もう一度押すと元に戻せます。';
+}
+function drawPreview(a,b){
+  ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=3;ctx.setLineDash([8,5]);
+  if(mode==='room'||mode==='corridor'){const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);ctx.strokeRect(x,y,Math.abs(b.x-a.x),Math.abs(b.y-a.y))}
+  else if(mode==='corridor'){const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);ctx.strokeRect(x,y,Math.abs(b.x-a.x),Math.abs(b.y-a.y));}else{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
+  ctx.restore();
+}
+function deleteSelected(){
+  if(selectedIndex<0){alert('先に「移動」を押して、削除したい設備または文字を選んでください。');return}
+  actions.splice(selectedIndex,1);selectedIndex=-1;draw();
+}
+function undo(){actions.pop();selectedIndex=-1;draw()}
+function clearAll(){if(confirm('全部消去しますか？')){actions=[];selectedIndex=-1;draw()}}
+function saveImage(){
+  const old=selectedIndex;selectedIndex=-1;draw();
+  const a=document.createElement('a');a.download='care-manager-map.png';a.href=c.toDataURL('image/png');a.click();
+  selectedIndex=old;draw();
+}
+draw();
+</script>
+</body>
+</html>
