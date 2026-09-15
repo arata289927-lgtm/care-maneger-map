@@ -1,11 +1,10 @@
-
 <!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1976d2">
-<title>ケアマネ間取り図 V12</title>
+<title>ケアマネ間取り図 V13.4</title>
 <style>
 *{box-sizing:border-box}
 :root{--blue:#1976d2;--bg:#f4f7fb;--line:#dbe2ea;--text:#222}
@@ -32,7 +31,7 @@ canvas{display:block;background:#fff;border:1px solid #aaa;box-shadow:0 2px 9px 
 </style>
 </head>
 <body>
-<header>ケアマネ間取り図 <small style="font-size:12px;font-weight:500;opacity:.9">V12</small></header>
+<header>ケアマネ間取り図 <small style="font-size:12px;font-weight:500;opacity:.9">V13.4</small></header>
 
 <div class="toolbar">
   <div class="group">
@@ -40,6 +39,8 @@ canvas{display:block;background:#fff;border:1px solid #aaa;box-shadow:0 2px 9px 
     <button id="roomBtn" class="active" onclick="setMode('room',this)">部屋</button>
     <button onclick="setMode('line',this)">壁・線</button>
     <button onclick="setMode('door',this)">ドア</button>
+    <button onclick="setMode('slidingDoor',this)">引き戸</button>
+    <button onclick="setMode('foldingDoor',this)">浴室折れ戸 W</button>
     <button onclick="setMode('window',this)">窓</button>
   </div>
 
@@ -49,11 +50,12 @@ canvas{display:block;background:#fff;border:1px solid #aaa;box-shadow:0 2px 9px 
       <option value="">設備を選ぶ</option>
       <option>玄関（外開き）</option><option>玄関（内開き）</option><option>玄関（引き戸）</option><option>トイレ（洋式）</option><option>トイレ（和式）</option><option>ポータブルトイレ</option><option>浴室</option><option>洗面</option>
       <option>台所</option><option>ベッド</option><option>手すり（横）</option><option>手すり（縦）</option><option>段差</option>
-      <option>階段</option><option>勝手口（開き戸）</option><option>勝手口（引き戸）</option><option>スロープ</option><option>門柱</option>
+      <option>階段</option><option>勝手口（外開き）</option><option>勝手口（内開き）</option><option>勝手口（引き戸）</option><option>スロープ</option><option>門柱</option>
       <option>廊下</option>
     </select>
     <button onclick="setMode('text',this)">文字</button>
     <button onclick="setMode('select',this)">移動</button>
+    <button onclick="selectNextUnderPoint()">重なり選択</button>
     <button onclick="rotateSelected()">↻ 回転</button>
     <button onclick="resizeSelected(1.1)">＋ 大きく</button>
     <button onclick="resizeSelected(0.9)">－ 小さく</button>
@@ -75,7 +77,7 @@ canvas{display:block;background:#fff;border:1px solid #aaa;box-shadow:0 2px 9px 
 
 <script>
 const c=document.getElementById('c'),ctx=c.getContext('2d'),help=document.getElementById('help');
-let mode='room',selectedItem='',start=null,temp=null,actions=[],selectedIndex=-1,dragOffset=null,activePointerId=null;
+let mode='room',selectedItem='',start=null,temp=null,actions=[],selectedIndex=-1,dragOffset=null,activePointerId=null,lastSelectPoint=null,lastCandidates=[];
 
 function setMode(m,btn){
   mode=m; selectedItem=''; document.getElementById('itemSelect').value='';
@@ -85,10 +87,12 @@ function setMode(m,btn){
     room:'「部屋」：ドラッグして部屋の四角を作ります。',
     corridor:'「廊下」：ドラッグして廊下を作ります。',
     line:'「壁・線」：ドラッグして壁や仕切り線を引きます。',
-    door:'「ドア」：ドラッグして開き戸を作ります。',
+    door:'「ドア」：ドラッグして開き戸を作ります。円弧は小さめに表示します。',
+    slidingDoor:'「引き戸」：ドラッグして引き戸を作ります。',
+    foldingDoor:'「浴室折れ戸 W」：ドラッグしてW型の折れ戸を作ります。',
     window:'「窓」：ドラッグして窓を作ります。',
     text:'「文字」：置きたい場所をタップして、部屋名などを入力します。',
-    select:'「移動」：設備・文字・ドアをタップして選択できます。設備は回転・大きさ変更、ドアは「⇄ ドア反転」ができます。'
+    select:'「移動」：部屋・廊下・壁・ドア・窓・設備・文字をタップして移動できます。開き戸は「⇄ ドア反転」ができます。'
   };
   help.textContent=t[m]||'';
   if(m!=='select') selectedIndex=-1;
@@ -119,10 +123,12 @@ function pointerDown(e){
   const raw=pnt(e),p=snapPoint(raw);
 
   if(mode==='select'){
-    selectedIndex=hitTest(p);
+    lastSelectPoint=p;lastCandidates=hitTestAll(p);
+    selectedIndex=lastCandidates.length?lastCandidates[0]:-1;
     if(selectedIndex>=0){
       const a=actions[selectedIndex];
-      if(a.x!==undefined)dragOffset={x:raw.x-a.x,y:raw.y-a.y};
+      if(a.x!==undefined)dragOffset={kind:'point',x:raw.x-a.x,y:raw.y-a.y};
+      else if(a.x1!==undefined)dragOffset={kind:'shape',x:raw.x-a.x1,y:raw.y-a.y1,dx:a.x2-a.x1,dy:a.y2-a.y1};
     }else dragOffset=null;
     draw();return;
   }
@@ -148,12 +154,13 @@ function pointerMove(e){
 
   if(mode==='select'&&selectedIndex>=0&&dragOffset){
     const a=actions[selectedIndex];
-    if(a.x!==undefined){
-      a.x=snap(raw.x-dragOffset.x);
-      a.y=snap(raw.y-dragOffset.y);
-      draw();
+    if(dragOffset.kind==='point'&&a.x!==undefined){
+      a.x=snap(raw.x-dragOffset.x);a.y=snap(raw.y-dragOffset.y);
+    }else if(dragOffset.kind==='shape'&&a.x1!==undefined){
+      const nx=snap(raw.x-dragOffset.x),ny=snap(raw.y-dragOffset.y);
+      a.x1=nx;a.y1=ny;a.x2=nx+dragOffset.dx;a.y2=ny+dragOffset.dy;
     }
-    return;
+    draw();return;
   }
   if(!start)return;
   temp=p;
@@ -204,32 +211,84 @@ function drawGrid(){
 }
 function draw(){drawGrid();actions.forEach((a,i)=>{drawAction(a);if(i===selectedIndex)drawSelection(a)})}
 function drawAction(a){
-  ctx.save();ctx.strokeStyle='#222';ctx.fillStyle='#222';ctx.lineWidth=4;ctx.font='18px sans-serif';
+  ctx.save();ctx.strokeStyle='#222';ctx.fillStyle='#222';ctx.lineWidth=2.4;ctx.font='18px sans-serif';
   if(a.type==='room'||a.type==='corridor'){
     const x=Math.min(a.x1,a.x2),y=Math.min(a.y1,a.y2),w=Math.abs(a.x2-a.x1),h=Math.abs(a.y2-a.y1);
-    if(a.type==='corridor'){ctx.fillStyle='#f4f4f4';ctx.fillRect(x,y,w,h);ctx.lineWidth=2;ctx.strokeStyle='#333';ctx.strokeRect(x,y,w,h);ctx.strokeStyle='#c9c9c9';ctx.lineWidth=1;for(let xx=x+12;xx<x+w;xx+=18){ctx.beginPath();ctx.moveTo(xx,y+2);ctx.lineTo(xx,y+h-2);ctx.stroke()}ctx.fillStyle='#222';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText('廊下',x+w/2,y+h/2+5);}else{ctx.strokeRect(x,y,w,h);}
+    if(a.type==='corridor'){ctx.fillStyle='#f4f4f4';ctx.fillRect(x,y,w,h);ctx.lineWidth=2;ctx.strokeStyle='#333';ctx.strokeRect(x,y,w,h);ctx.strokeStyle='#c9c9c9';ctx.lineWidth=1;for(let xx=x+12;xx<x+w;xx+=18){ctx.beginPath();ctx.moveTo(xx,y+2);ctx.lineTo(xx,y+h-2);ctx.stroke()}ctx.fillStyle='#222';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText('廊下',x+w/2,y+h/2+5);}else{ctx.lineWidth=2.4;ctx.strokeRect(x,y,w,h);}
   }else if(a.type==='line'){
-    ctx.beginPath();ctx.moveTo(a.x1,a.y1);ctx.lineTo(a.x2,a.y2);ctx.stroke();
+    ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(a.x1,a.y1);ctx.lineTo(a.x2,a.y2);ctx.stroke();
   }else if(a.type==='door'){drawDoor(a.x1,a.y1,a.x2,a.y2,a.flip||false)}
+  else if(a.type==='slidingDoor'){drawSlidingDoor(a.x1,a.y1,a.x2,a.y2)}
+  else if(a.type==='foldingDoor'){drawFoldingDoor(a.x1,a.y1,a.x2,a.y2,a.flip||false)}
   else if(a.type==='window'){drawWindow(a.x1,a.y1,a.x2,a.y2)}
   else if(a.type==='text'){ctx.fillText(a.text,a.x,a.y)}
   else if(a.type==='item'){drawItem(a.text,a.x,a.y,a.rot||0,a.scale||1)}
   ctx.restore();
 }
 function drawDoor(x1,y1,x2,y2,flip=false){
-  const r=Math.hypot(x2-x1,y2-y1);if(r<5)return;
+  const leaf=Math.hypot(x2-x1,y2-y1);if(leaf<5)return;
   const ang=Math.atan2(y2-y1,x2-x1);
-  // 戸そのもの
-  ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-  // 蝶番を見やすく表示
-  ctx.fillStyle='#222';ctx.beginPath();ctx.arc(x1,y1,4,0,Math.PI*2);ctx.fill();
-  // 開閉弧。flipで左右を反転
-  ctx.lineWidth=2;ctx.setLineDash([5,4]);
+  const arcR=leaf*0.80;
+
+  // 戸本体
+  ctx.save();
+  ctx.strokeStyle='#222';
+  ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+
+  // 蝶番
+  ctx.fillStyle='#222';
+  ctx.beginPath();ctx.arc(x1,y1,3.5,0,Math.PI*2);ctx.fill();
+
+  // 円弧は戸本体を境に、左右どちら側にも切替可能
+  ctx.strokeStyle='#555';
+  ctx.lineWidth=1.8;
+  ctx.setLineDash([5,4]);
   ctx.beginPath();
-  if(flip) ctx.arc(x1,y1,r,ang-Math.PI/2,ang,false);
-  else ctx.arc(x1,y1,r,ang,ang+Math.PI/2,false);
-  ctx.stroke();ctx.setLineDash([]);
+  if(flip){
+    ctx.arc(x1,y1,arcR,ang,ang-Math.PI/2,true);
+  }else{
+    ctx.arc(x1,y1,arcR,ang,ang+Math.PI/2,false);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
 }
+
+function drawSlidingDoor(x1,y1,x2,y2){
+  const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);if(len<5)return;
+  const ux=dx/len,uy=dy/len,nx=-uy,ny=ux,mx=(x1+x2)/2,my=(y1+y2)/2,q=len*.23;
+  ctx.save();ctx.strokeStyle='#222';ctx.lineCap='round';ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.moveTo(x1+nx*3,y1+ny*3);ctx.lineTo(x2+nx*3,y2+ny*3);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x1-nx*3,y1-ny*3);ctx.lineTo(x2-nx*3,y2-ny*3);ctx.stroke();
+  ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(mx-ux*q+nx*7,my-uy*q+ny*7);ctx.lineTo(mx+ux*q+nx*7,my+uy*q+ny*7);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(mx-ux*q-nx*7,my-uy*q-ny*7);ctx.lineTo(mx+ux*q-nx*7,my+uy*q-ny*7);ctx.stroke();ctx.restore();
+}
+function drawFoldingDoor(x1,y1,x2,y2,flip=false){
+  const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);if(len<5)return;
+  const ux=dx/len,uy=dy/len,nx=-uy,ny=ux,mx=(x1+x2)/2,my=(y1+y2)/2;
+  const side=flip?-1:1;
+  const fold=Math.min(16,len*.28)*side;
+
+  ctx.save();
+  // 浴室折れ戸は青で通常ドアと見分けやすくする
+  ctx.strokeStyle='#1976d2';
+  ctx.lineWidth=2.6;
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+
+  // W型。flipで折れ方向を反対側へ
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(mx-ux*len*.18+nx*fold,my-uy*len*.18+ny*fold);
+  ctx.lineTo(mx,my);
+  ctx.lineTo(mx+ux*len*.18+nx*fold,my+uy*len*.18+ny*fold);
+  ctx.lineTo(x2,y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawWindow(x1,y1,x2,y2){
   ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
   ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
@@ -310,17 +369,32 @@ function drawItem(text,x,y,rot=0,scale=1){
   }else if(text==='段差'){
     ctx.beginPath();ctx.moveTo(-36,-13);ctx.lineTo(2,-13);ctx.lineTo(2,12);ctx.lineTo(36,12);ctx.stroke();
     ctx.beginPath();ctx.moveTo(-26,4);ctx.lineTo(-10,4);ctx.lineTo(-10,12);ctx.stroke();
-  }else if(text==='勝手口（開き戸）'||text==='勝手口（引き戸）'){
-    // 勝手口：玄関より小さな外部扉＋外段差。引き戸は横矢印で区別。
+  }else if(text==='勝手口（外開き）'||text==='勝手口（内開き）'||text==='勝手口（引き戸）'){
+    // 勝手口：外側を下、室内側を上として表現。外開き・内開き・引き戸を区別。
     ctx.lineWidth=3;ctx.strokeRect(-25,-32,50,64);
     ctx.lineWidth=2;ctx.strokeRect(-16,-22,32,20);ctx.beginPath();ctx.moveTo(-16,-12);ctx.lineTo(16,-12);ctx.stroke();
     if(text==='勝手口（引き戸）'){
-      ctx.beginPath();ctx.moveTo(-13,8);ctx.lineTo(13,8);ctx.moveTo(-13,8);ctx.lineTo(-7,3);ctx.moveTo(-13,8);ctx.lineTo(-7,13);ctx.moveTo(13,8);ctx.lineTo(7,3);ctx.moveTo(13,8);ctx.lineTo(7,13);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(-13,8);ctx.lineTo(13,8);
+      ctx.moveTo(-13,8);ctx.lineTo(-7,3);ctx.moveTo(-13,8);ctx.lineTo(-7,13);
+      ctx.moveTo(13,8);ctx.lineTo(7,3);ctx.moveTo(13,8);ctx.lineTo(7,13);ctx.stroke();
       ctx.beginPath();ctx.moveTo(-4,-32);ctx.lineTo(-4,32);ctx.stroke();
     }else{
-      ctx.beginPath();ctx.arc(15,11,2.8,0,Math.PI*2);ctx.fillStyle='#222';ctx.fill();ctx.fillStyle='#fff';
-      ctx.beginPath();ctx.moveTo(-20,32);ctx.lineTo(20,32);ctx.moveTo(-20,32);ctx.lineTo(-20,2);ctx.arc(-20,32,30,-Math.PI/2,0,false);ctx.stroke();
+      const outer=text==='勝手口（外開き）';
+      const hx=-20, hy=32, len=30;
+      ctx.fillStyle='#222';ctx.beginPath();ctx.arc(hx,hy,2.8,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';
+      ctx.beginPath();
+      if(outer){
+        // 外開き：外側（下）へ
+        ctx.moveTo(hx,hy);ctx.lineTo(hx,hy+len);
+        ctx.arc(hx,hy,len,Math.PI/2,0,true);
+      }else{
+        // 内開き：室内側（上）へ
+        ctx.moveTo(hx,hy);ctx.lineTo(hx,hy-len);
+        ctx.arc(hx,hy,len,-Math.PI/2,0,false);
+      }
+      ctx.stroke();
     }
+    // 外段差
     ctx.beginPath();ctx.moveTo(-34,32);ctx.lineTo(34,32);ctx.moveTo(-28,40);ctx.lineTo(28,40);ctx.moveTo(-22,47);ctx.lineTo(22,47);ctx.stroke();
   }else if(text==='スロープ'){
     // 傾斜面＋両側手すり＋進行矢印
@@ -343,7 +417,7 @@ function drawItem(text,x,y,rot=0,scale=1){
   const labels={
     'トイレ（洋式）':'洋式WC','トイレ':'WC','トイレ（和式）':'和式WC','ポータブルトイレ':'ポータブル',
     '浴室':'浴室','洗面':'洗面','台所':'台所','玄関（外開き）':'玄関 外開き','玄関（内開き）':'玄関 内開き','玄関（引き戸）':'玄関 引き戸','ベッド':'ベッド','手すり（横）':'横手すり','手すり（縦）':'縦手すり',
-    '段差':'段差','勝手口（開き戸）':'勝手口 開き戸','勝手口（引き戸）':'勝手口 引き戸','スロープ':'スロープ','門柱':'門柱','階段':'階段'
+    '段差':'段差','勝手口（外開き）':'勝手口 外開き','勝手口（内開き）':'勝手口 内開き','勝手口（引き戸）':'勝手口 引き戸','スロープ':'スロープ','門柱':'門柱','階段':'階段'
   };
   if(labels[text])ctx.fillText(labels[text],0,42);
   ctx.restore();
@@ -354,18 +428,39 @@ function pointSegDist(px,py,x1,y1,x2,y2){
   let t=((px-x1)*dx+(py-y1)*dy)/l2;t=Math.max(0,Math.min(1,t));
   return Math.hypot(px-(x1+t*dx),py-(y1+t*dy));
 }
-function hitTest(p){
+function hitTestAll(p){
+  const found=[];
   for(let i=actions.length-1;i>=0;i--){
-    const a=actions[i];
-    if(a.type==='item'){const sc=a.scale||1;if(Math.abs(p.x-a.x)<=58*sc&&Math.abs(p.y-a.y)<=58*sc)return i;}
-    if(a.type==='text'&&Math.abs(p.x-a.x)<=58&&Math.abs(p.y-a.y)<=58)return i;
-    if(a.type==='door'&&pointSegDist(p.x,p.y,a.x1,a.y1,a.x2,a.y2)<=22)return i;
+    const a=actions[i];let hit=false;
+    if(a.type==='item'){const sc=a.scale||1;hit=Math.abs(p.x-a.x)<=58*sc&&Math.abs(p.y-a.y)<=58*sc;}
+    else if(a.type==='text')hit=Math.abs(p.x-a.x)<=58&&Math.abs(p.y-a.y)<=58;
+    else if(a.type==='room'||a.type==='corridor'){
+      const minx=Math.min(a.x1,a.x2),maxx=Math.max(a.x1,a.x2),miny=Math.min(a.y1,a.y2),maxy=Math.max(a.y1,a.y2);
+      hit=p.x>=minx-10&&p.x<=maxx+10&&p.y>=miny-10&&p.y<=maxy+10;
+    }else if(['line','door','slidingDoor','foldingDoor','window'].includes(a.type))
+      hit=pointSegDist(p.x,p.y,a.x1,a.y1,a.x2,a.y2)<=22;
+    if(hit)found.push(i);
   }
-  return -1;
+  return found;
 }
+function hitTest(p){const f=hitTestAll(p);return f.length?f[0]:-1;}
+function selectNextUnderPoint(){
+  if(mode!=='select'){alert('先に「移動」を押してください。');return;}
+  if(!lastSelectPoint){alert('重なっている場所を先にタップしてください。');return;}
+  lastCandidates=hitTestAll(lastSelectPoint);
+  if(!lastCandidates.length){selectedIndex=-1;draw();return;}
+  let pos=lastCandidates.indexOf(selectedIndex);
+  selectedIndex=lastCandidates[(pos+1+lastCandidates.length)%lastCandidates.length];
+  dragOffset=null;
+  const a=actions[selectedIndex];
+  const name=a.type==='item'?a.text:({room:'部屋',corridor:'廊下',line:'壁・線',door:'ドア',slidingDoor:'引き戸',foldingDoor:'浴室折れ戸',window:'窓',text:'文字'}[a.type]||'図形');
+  help.textContent='選択中：'+name+'。「重なり選択」で次の図形に切り替えられます。';
+  draw();
+}
+
 function drawSelection(a){
   ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=2;ctx.setLineDash([6,4]);
-  if(a.type==='door'){
+  if(a.x1!==undefined){
     const pad=14,x=Math.min(a.x1,a.x2)-pad,y=Math.min(a.y1,a.y2)-pad;
     ctx.strokeRect(x,y,Math.abs(a.x2-a.x1)+pad*2,Math.abs(a.y2-a.y1)+pad*2);
   }else if(a.x!==undefined){
@@ -395,12 +490,19 @@ function resetSelectedSize(){
   a.scale=1;draw();help.textContent='設備の大きさを100％に戻しました。';
 }
 function flipDoor(){
-  if(selectedIndex<0){alert('先に「移動」を押して、反転したいドアを選択してください。');return}
+  if(selectedIndex<0){alert('先に「移動」を押して、向きを変えたいドアを選択してください。');return}
   const a=actions[selectedIndex];
-  if(a.type!=='door'){alert('「ドア反転」はドアを選択した時に使えます。');return}
+  if(a.type!=='door'&&a.type!=='foldingDoor'){
+    alert('この反転は開き戸または浴室折れ戸を選択した時に使えます。');return;
+  }
   a.flip=!a.flip;draw();
-  help.textContent='ドアの開く向きを反転しました。もう一度押すと元に戻せます。';
+  if(a.type==='foldingDoor'){
+    help.textContent='浴室折れ戸の折れる向きを反転しました。もう一度押すと元に戻せます。';
+  }else{
+    help.textContent='ドアの円弧を反対側に切り替えました。もう一度押すと元に戻せます。';
+  }
 }
+
 function drawPreview(a,b){
   ctx.save();ctx.strokeStyle='#1976d2';ctx.lineWidth=3;ctx.setLineDash([8,5]);
   if(mode==='room'||mode==='corridor'){const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);ctx.strokeRect(x,y,Math.abs(b.x-a.x),Math.abs(b.y-a.y))}
